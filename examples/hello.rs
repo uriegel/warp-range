@@ -26,6 +26,10 @@ fn create_headers() -> HeaderMap {
 }
 
 pub async fn get_video() -> Result<impl warp::Reply, warp::Rejection> {
+
+
+    // TODO: content-length!!!
+
     match tokio::fs::File::open("/home/uwe/Videos/Drive.mkv").await {
         Ok(file) => {
             let stream = FramedRead::new(file, BytesCodec::new());
