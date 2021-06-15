@@ -10,5 +10,7 @@ edition = "2018"
 
 [dev-dependencies]
 tokio = { version = "1.5", features = ["full"] }
+tokio-util = "0.6"
+hyper = "0.14"
 warp = "0.3"
 chrono = "0.4"
