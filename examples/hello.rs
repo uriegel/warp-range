@@ -1,3 +1,5 @@
+use std::cmp::min;
+
 use chrono::Utc;
 use hyper::Error;
 use tokio::io::AsyncReadExt;
@@ -35,10 +37,10 @@ pub async fn get_range(range: String, file: &str) -> Result<impl warp::Reply, wa
                 let size = metadata.len();
                 let stream = stream! {
                     let bufsize = 16384;
-                    let cycles = size / bufsize as u64 + 3;
+                    let cycles = size / bufsize as u64 + 1;
                     let mut sent_bytes: u64 = 0;
-                    for _ in 1..cycles {
-                        let mut buffer: Vec<u8> = vec![0; bufsize];
+                    for _ in 0..cycles {
+                        let mut buffer: Vec<u8> = vec![0; min(size - sent_bytes, bufsize) as usize];
                         match file.read_exact(&mut buffer).await {
                             Ok(res) => {
                                 sent_bytes += res as u64;
