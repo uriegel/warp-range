@@ -34,12 +34,20 @@ pub async fn get_range(range: String, file: &str) -> Result<impl warp::Reply, wa
             if let Ok(metadata) = file.metadata().await {
                 let size = metadata.len();
                 let stream = stream! {
-                    let mut buffer: Vec<u8> = vec![0; size as usize];
-                    match file.read_exact(&mut buffer).await {
-                        Ok(res) => println!("Video stream: {}, {}", res, buffer.len()),
-                        Err(error) => println!("Could not get video stream: {:?}", error),
+                    let bufsize = 16384;
+                    let cycles = size / bufsize as u64 + 3;
+                    let mut sent_bytes: u64 = 0;
+                    for _ in 1..cycles {
+                        let mut buffer: Vec<u8> = vec![0; bufsize];
+                        match file.read_exact(&mut buffer).await {
+                            Ok(res) => {
+                                sent_bytes += res as u64;
+                                println!("Video stream: {}, {}, {}", res, buffer.len(), sent_bytes)
+                            },
+                            Err(error) => println!("Could not get video stream: {:?}", error),
+                        }
+                        yield Ok(buffer) as Result<Vec<u8>, Error>;
                     }
-                    yield Ok(buffer) as Result<Vec<u8>, Error>;
                 };
                 let body = hyper::Body::wrap_stream(stream);
                 let mut response = warp::reply::Response::new(body);
