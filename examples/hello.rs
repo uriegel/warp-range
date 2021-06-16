@@ -30,7 +30,14 @@ fn create_headers() -> HeaderMap {
 }
 
 pub async fn get_range(range: String, file: &str) -> Result<impl warp::Reply, warp::Rejection> {
-    println!("Range: {}", range);
+    let range: Vec<String> = range
+        .replace("bytes=", "")
+        .split("-")
+        .filter_map(|n| if n.len() > 0 {Some(n.to_string())} else {None})
+        .collect();
+        
+
+    println!("Range: {:?}", range);
     match tokio::fs::File::open(file).await {
         Ok(mut file ) => {
             if let Ok(metadata) = file.metadata().await {
@@ -44,7 +51,7 @@ pub async fn get_range(range: String, file: &str) -> Result<impl warp::Reply, wa
                         match file.read_exact(&mut buffer).await {
                             Ok(res) => {
                                 sent_bytes += res as u64;
-                                println!("Video stream: {}, {}, {}", res, buffer.len(), sent_bytes)
+                                //println!("Video stream: {}, {}, {}", res, buffer.len(), sent_bytes)
                             },
                             Err(error) => println!("Could not get video stream: {:?}", error),
                         }
