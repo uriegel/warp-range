@@ -1,12 +1,8 @@
-use std::{pin::Pin, task::{Context, Poll}};
-
 use chrono::Utc;
-use futures_util::Future;
 use hyper::Error;
+use tokio::io::AsyncReadExt;
 use tokio_util::codec::{BytesCodec, FramedRead};
-use tokio_stream::StreamExt;
-use std::time::{Duration, Instant};
-use async_stream::{AsyncStream, stream};
+use async_stream::stream;
 use warp::{
     Filter, Reply, fs::{
         File, dir
@@ -39,22 +35,6 @@ pub async fn get_video(filename: &str) -> Result<impl warp::Reply, warp::Rejecti
             match file.metadata().await {
                 Ok(metadata) => {
                     println!("Län: {}", metadata.len());
-
-
-
-let stream = stream! {
-    let mut when = Instant::now();
-    for _ in 0..3 {
-        //let delay = tokio::timer::Sleep { when };
-        let sleep = tokio::time::sleep(Duration::from_millis(10));
-        sleep.await;
-        yield 2;
-        when += Duration::from_millis(10);
-    }
-};
-
-
-
                     let stream = FramedRead::new(file, BytesCodec::new());
                     let body = hyper::Body::wrap_stream(stream);
                     let mut response = warp::reply::Response::new(body);
@@ -76,12 +56,6 @@ let stream = stream! {
             Err(warp::reject())
         }
     }
-}
-
-struct VideoStream {
-    file: tokio::fs::File,
-    first: bool,
-    len: u64
 }
 
 // impl VideoStream {
@@ -134,46 +108,31 @@ struct VideoStream {
 
 pub async fn get_range(range: String, file: &str) -> Result<impl warp::Reply, warp::Rejection> {
     println!("Range: {}", range);
-
-
-    
-    
-
     match tokio::fs::File::open(file).await {
-        Ok(file) => {
-//            match VideoStream::get(file).await {
-//                Some(video_stream) => {
-                    //let size = video_stream.len;
-                    //let stream = futures_util::stream::iter(video_stream);
-                    //let stream = video_stream;
-
-                    let stream = stream! {
-                        let mut when = Instant::now();
-                        for _ in 0..3 {
-                            println!("Das bin ich auch");
-                            let sleep = tokio::time::sleep(Duration::from_millis(1000));
-                            sleep.await;
-                            yield Ok(vec![54 as u8,55,56]) as Result<Vec<u8>, Error>;
-                            when += Duration::from_millis(10);
-                        }
-                    };
-                    
-                    let body = hyper::Body::wrap_stream(stream);
-                    let mut response = warp::reply::Response::new(body);
-                    
-                    let headers = response.headers_mut();
-                    let mut header_map = create_headers();
-                    //header_map.insert("Content-Type", HeaderValue::from_str("video/mp4").unwrap());
-                    header_map.insert("Content-Type", HeaderValue::from_str("text/plain").unwrap());
-                    header_map.insert("Content-Length", HeaderValue::from(9));
-                    headers.extend(header_map);
-                    Ok (response)
-                // },
-                // None => {
-                //     println!("Could not get video stream");
-                //     Err(warp::reject())
-                //}
-            //}
+        Ok(mut file ) => {
+            if let Ok(metadata) = file.metadata().await {
+                let size = metadata.len();
+                let stream = stream! {
+                    let mut buffer: Vec<u8> = Vec::new();
+                    match file.read_to_end(&mut buffer).await {
+                        Ok(_) => println!("Video stream: {}", buffer.len()),
+                        Err(error) => println!("Could not get video stream: {:?}", error),
+                    }
+                    yield Ok(buffer) as Result<Vec<u8>, Error>;
+                };
+                let body = hyper::Body::wrap_stream(stream);
+                let mut response = warp::reply::Response::new(body);
+                
+                let headers = response.headers_mut();
+                let mut header_map = create_headers();
+                header_map.insert("Content-Type", HeaderValue::from_str("video/mp4").unwrap());
+                header_map.insert("Content-Length", HeaderValue::from(size));
+                headers.extend(header_map);
+                Ok (response)
+            } else {
+                println!("Could not get video stream");
+                Err(warp::reject())
+            }
         },
         Err(err) => {
             println!("Could not get pdf: {}", err);
