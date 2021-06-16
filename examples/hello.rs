@@ -132,24 +132,6 @@ struct VideoStream {
 //}
 
 
-fn get_body(file: tokio::fs::File)->Body {
-    let stream = stream! {
-        let mut when = Instant::now();
-        for _ in 0..3 {
-
-            println!("Das bin ich");
-
-            //let delay = tokio::timer::Sleep { when };
-            let sleep = tokio::time::sleep(Duration::from_millis(1000));
-            sleep.await;
-            yield Ok(vec![54 as u8,55,56]) as Result<Vec<u8>, Error>;
-            when += Duration::from_millis(10);
-        }
-    };
-    //let stream = FramedRead::new(file, BytesCodec::new());
-    hyper::Body::wrap_stream(stream)
-}
-
 pub async fn get_range(range: String, file: &str) -> Result<impl warp::Reply, warp::Rejection> {
     println!("Range: {}", range);
 
@@ -165,11 +147,18 @@ pub async fn get_range(range: String, file: &str) -> Result<impl warp::Reply, wa
                     //let stream = futures_util::stream::iter(video_stream);
                     //let stream = video_stream;
 
-
-
-                    //let stream = FramedRead::new(file, BytesCodec::new());
-                    //let body = hyper::Body::wrap_stream(stream);
-                    let body = get_body(file);
+                    let stream = stream! {
+                        let mut when = Instant::now();
+                        for _ in 0..3 {
+                            println!("Das bin ich auch");
+                            let sleep = tokio::time::sleep(Duration::from_millis(1000));
+                            sleep.await;
+                            yield Ok(vec![54 as u8,55,56]) as Result<Vec<u8>, Error>;
+                            when += Duration::from_millis(10);
+                        }
+                    };
+                    
+                    let body = hyper::Body::wrap_stream(stream);
                     let mut response = warp::reply::Response::new(body);
                     
                     let headers = response.headers_mut();
