@@ -29,19 +29,27 @@ fn create_headers() -> HeaderMap {
     header_map
 }
 
-pub async fn get_range(range: String, file: &str) -> Result<impl warp::Reply, warp::Rejection> {
+fn get_range(range: &str) {
     let range: Vec<String> = range
         .replace("bytes=", "")
         .split("-")
         .filter_map(|n| if n.len() > 0 {Some(n.to_string())} else {None})
         .collect();
-        
+    let start = if let start = range[0] {start} else {0}
 
-    println!("Range: {:?}", range);
+    }
+    
+    let end = if range.len() > 0 {range[1]}  (size-1).to_string()
+}
+
+pub async fn get_range(range: String, file: &str) -> Result<impl warp::Reply, warp::Rejection> {
     match tokio::fs::File::open(file).await {
         Ok(mut file ) => {
             if let Ok(metadata) = file.metadata().await {
                 let size = metadata.len();
+
+        
+
                 let stream = stream! {
                     let bufsize = 16384;
                     let cycles = size / bufsize as u64 + 1;
@@ -65,7 +73,7 @@ pub async fn get_range(range: String, file: &str) -> Result<impl warp::Reply, wa
                 let mut header_map = create_headers();
                 header_map.insert("Content-Type", HeaderValue::from_str("video/mp4").unwrap());
                 header_map.insert("Accept-Ranges", HeaderValue::from_str("bytes").unwrap());
-                header_map.insert("Content-Range", HeaderValue::from_str(&format!("bytes {}-{}/{}", 0, size, size)).unwrap());
+                header_map.insert("Content-Range", HeaderValue::from_str(&format!("bytes {}-{}/{}", 0, size - 1, size)).unwrap());
                 header_map.insert("Content-Length", HeaderValue::from(size));
                 headers.extend(header_map);
                 Ok (response)
