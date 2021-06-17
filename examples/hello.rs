@@ -1,4 +1,3 @@
-use chrono::Utc;
 use hyper::{Body, HeaderMap, Response, header::HeaderValue};
 use warp::{Filter, Reply, fs::{File, dir}};
 use warp_range::{filter_range, get_range, with_partial_content_status};
@@ -13,9 +12,6 @@ fn add_headers(reply: File)->Response<Body> {
 
 fn create_headers() -> HeaderMap {
     let mut header_map = HeaderMap::new();
-    let now = Utc::now();
-    let now_str = now.format("%a, %d %h %Y %T GMT").to_string();
-    header_map.insert("Expires", HeaderValue::from_str(now_str.as_str()).unwrap());
     header_map.insert("Server", HeaderValue::from_str("warp-range").unwrap());
     header_map
 }
@@ -30,14 +26,13 @@ async fn main() {
     let route_get_video = 
         warp::path("getvideo")
         .and(warp::path::end())
-        .and_then(move || get_range("".to_string(), test_video));
+        .and_then(move || get_range("".to_string(), test_video, "video/mp4"));
 
     let route_get_range = 
         warp::path("getvideo")
         .and(warp::path::end())
-        
         .and(filter_range())
-        .and_then(move |range_header| get_range(range_header, test_video))
+        .and_then(move |range_header| get_range(range_header, test_video, "video/mp4"))
         .map(with_partial_content_status);
 
     let route_static = dir(".")

@@ -1,5 +1,59 @@
+//! # warp-range
+//! 
+//! A Rust library for creating a warp filter for serving file content with range like mp3 audio or mp4 video.
+//! This warp filter can be used in a HTTP server based on warp. 
+//! 
+//! The content is served like streaming. If you view a movie served by this filter, you can seek through it even if the file is not completely downloaded.
+//!
+//! Here is an easy example to add range to an existing warp server:
+//! ``` 
+//! use hyper::{Body, Response};
+//! use warp::{Filter, Reply, fs::{File, dir}};
+//! use warp_range::{filter_range, get_range, with_partial_content_status};
+//! 
+//! #[tokio::main]
+//! async fn main() {
+//!     let test_video = "/home/uwe/Videos/Drive.mkv";
+//!     
+//!     let port = 9860;
+//!     println!("Running test server on http://localhost:{}", port);
+//! 
+//!     let route_get_range = 
+//!         warp::path("getvideo")
+//!         .and(warp::path::end())
+//!         .and(filter_range())
+//!         .and_then(move |range_header| get_range(range_header, test_video, "video/mp4"))
+//!         .map(with_partial_content_status);
+//! 
+//!     let route_static = dir(".");
+//!     
+//!     let routes = route_get_range
+//!         .or(route_static);
+//! 
+//!     warp::serve(routes)
+//!         .run(([127, 0, 0, 1], port))
+//!         .await;        
+//! ``` 
+//!
+//! If you want to serve the media file without range, which is sometimes necessary, because the browser requests it perhaps without 
+//! range request header, you can add another route without range:
+//! 
+//! ``` 
+//!     let route_get_video = 
+//!     warp::path("getvideo")
+//!     .and(warp::path::end())
+//!     .and_then(move || get_range("".to_string(), test_video, "video/mp4"));
+//! ``` 
+//!
+//! You have to add this route after the range route:
+//!
+//! ``` 
+//!     let routes = route_get_range
+//!         .or(route_get_video)
+//!         .or(route_static);
+//! ``` 
+
 use async_stream::stream;
-use chrono::Utc;
 use hyper::StatusCode;
 use std::{
     cmp::min, io::SeekFrom, num::ParseIntError
@@ -11,28 +65,22 @@ use warp::{
     Filter, Rejection, Reply, http::HeaderValue, hyper::HeaderMap, reply::WithStatus
 };
 
+/// This function filters and extracts the "Range"-Header
 pub fn filter_range() -> impl Filter<Extract = (String,), Error = Rejection> + Copy {
     warp::header::<String>("Range")
 }
 
-pub async fn get_range(range_header: String, file: &str) -> Result<impl warp::Reply, Rejection> {
-    internal_get_range(range_header, file).await.map_err(|e| {
+/// This function retrives the range of bytes requested by the web client
+pub async fn get_range(range_header: String, file: &str, content_type: &str) -> Result<impl warp::Reply, Rejection> {
+    internal_get_range(range_header, file, content_type).await.map_err(|e| {
         println!("Error in get_range: {}", e.message);
         warp::reject()
     })
 }
 
+/// This function adds the "206 Partial Content" header
 pub fn with_partial_content_status<T: Reply>(reply: T) -> WithStatus<T> {
     warp::reply::with_status(reply, StatusCode::PARTIAL_CONTENT) 
-}
-
-fn create_headers() -> HeaderMap {
-    let mut header_map = HeaderMap::new();
-    let now = Utc::now();
-    let now_str = now.format("%a, %d %h %Y %T GMT").to_string();
-    header_map.insert("Expires", HeaderValue::from_str(now_str.as_str()).unwrap());
-    header_map.insert("Server", HeaderValue::from_str("warp-range").unwrap());
-    header_map
 }
 
 fn get_range_params(range: &str, size: u64)->Result<(u64, u64), Error> {
@@ -70,7 +118,7 @@ impl From<ParseIntError> for Error {
     }
 }
 
-async fn internal_get_range(range_header: String, file: &str) -> Result<impl warp::Reply, Error> {
+async fn internal_get_range(range_header: String, file: &str, content_type: &str) -> Result<impl warp::Reply, Error> {
     let mut file = tokio::fs::File::open(file).await?;
     let metadata = file.metadata().await?;
     let size = metadata.len();
@@ -93,8 +141,8 @@ async fn internal_get_range(range_header: String, file: &str) -> Result<impl war
     let mut response = warp::reply::Response::new(body);
     
     let headers = response.headers_mut();
-    let mut header_map = create_headers();
-    header_map.insert("Content-Type", HeaderValue::from_str("video/mp4").unwrap());
+    let mut header_map = HeaderMap::new();
+    header_map.insert("Content-Type", HeaderValue::from_str(content_type).unwrap());
     header_map.insert("Accept-Ranges", HeaderValue::from_str("bytes").unwrap());
     header_map.insert("Content-Range", HeaderValue::from_str(&format!("bytes {}-{}/{}", start_range, end_range, size)).unwrap());
     header_map.insert("Content-Length", HeaderValue::from(byte_count));
