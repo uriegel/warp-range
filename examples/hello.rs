@@ -1,7 +1,7 @@
 use std::cmp::min;
 
 use chrono::Utc;
-use hyper::Error;
+use hyper::{Error, StatusCode};
 use tokio::io::AsyncReadExt;
 use async_stream::stream;
 use warp::{
@@ -51,7 +51,7 @@ pub async fn get_range(range: String, file: &str) -> Result<impl warp::Reply, wa
                         match file.read_exact(&mut buffer).await {
                             Ok(res) => {
                                 sent_bytes += res as u64;
-                                //println!("Video stream: {}, {}, {}", res, buffer.len(), sent_bytes)
+                                println!("Video stream: {}, {}, {}", res, buffer.len(), sent_bytes)
                             },
                             Err(error) => println!("Could not get video stream: {:?}", error),
                         }
@@ -64,6 +64,8 @@ pub async fn get_range(range: String, file: &str) -> Result<impl warp::Reply, wa
                 let headers = response.headers_mut();
                 let mut header_map = create_headers();
                 header_map.insert("Content-Type", HeaderValue::from_str("video/mp4").unwrap());
+                header_map.insert("Accept-Ranges", HeaderValue::from_str("bytes").unwrap());
+                header_map.insert("Content-Range", HeaderValue::from_str(&format!("bytes {}-{}/{}", 0, size, size)).unwrap());
                 header_map.insert("Content-Length", HeaderValue::from(size));
                 headers.extend(header_map);
                 Ok (response)
@@ -91,7 +93,10 @@ async fn main() {
         warp::path("getvideo")
         .and(warp::path::end())
         .and(warp::header::<String>("Range"))
-        .and_then(move |r| get_range(r, test_video));
+        .and_then(move |r| get_range(r, test_video))
+        .map(|reply|{
+            warp::reply::with_status(reply, StatusCode::PARTIAL_CONTENT)
+        });
 
     let route_static = dir(".")
         .map(add_headers);
