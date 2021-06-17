@@ -1,7 +1,7 @@
 use std::cmp::min;
 
 use chrono::Utc;
-use hyper::{Error, StatusCode};
+use hyper::StatusCode;
 use tokio::io::AsyncReadExt;
 use async_stream::stream;
 use warp::{Filter, Rejection, Reply, fs::{
@@ -48,51 +48,64 @@ fn create_headers() -> HeaderMap {
 //     let end = if range.len() > 0 {range[1]}  (size-1).to_string()
 // }
 
-pub async fn get_range(range_header: String, file: &str) -> Result<impl warp::Reply, warp::Rejection> {
-    match tokio::fs::File::open(file).await {
-        Ok(mut file ) => {
-            if let Ok(metadata) = file.metadata().await {
-                let size = metadata.len();
 
-        
+#[derive(Debug)]
+pub struct Error {
+}
 
-                let stream = stream! {
-                    let bufsize = 16384;
-                    let cycles = size / bufsize as u64 + 1;
-                    let mut sent_bytes: u64 = 0;
-                    for _ in 0..cycles {
-                        let mut buffer: Vec<u8> = vec![0; min(size - sent_bytes, bufsize) as usize];
-                        match file.read_exact(&mut buffer).await {
-                            Ok(res) => {
-                                sent_bytes += res as u64;
-                                println!("Video stream: {}, {}, {}", res, buffer.len(), sent_bytes)
-                            },
-                            Err(error) => println!("Could not get video stream: {:?}", error),
-                        }
-                        yield Ok(buffer) as Result<Vec<u8>, Error>;
-                    }
-                };
-                let body = hyper::Body::wrap_stream(stream);
-                let mut response = warp::reply::Response::new(body);
-                
-                let headers = response.headers_mut();
-                let mut header_map = create_headers();
-                header_map.insert("Content-Type", HeaderValue::from_str("video/mp4").unwrap());
-                header_map.insert("Accept-Ranges", HeaderValue::from_str("bytes").unwrap());
-                header_map.insert("Content-Range", HeaderValue::from_str(&format!("bytes {}-{}/{}", 0, size - 1, size)).unwrap());
-                header_map.insert("Content-Length", HeaderValue::from(size));
-                headers.extend(header_map);
-                Ok (response)
-            } else {
-                println!("Could not get video stream");
-                Err(warp::reject())
-            }
-        },
-        Err(err) => {
-            println!("Could not get pdf: {}", err);
-            Err(warp::reject())
-        }
+impl From<std::io::Error> for Error {
+    fn from(err: std::io::Error) -> Self {
+        Error {}
     }
+}
+
+pub async fn get_range(range_header: String, file: &str) -> Result<impl warp::Reply, Rejection> {
+    internal_get_range(range_header, file).await.map_err(|e| {warp::reject()})
+}
+
+async fn internal_get_range(range_header: String, file: &str) -> Result<impl warp::Reply, Error> {
+    let mut file = tokio::fs::File::open(file).await?;
+    let metadata = file.metadata().await?;
+    let size = metadata.len();
+
+
+
+    let stream = stream! {
+        let bufsize = 16384;
+        let cycles = size / bufsize as u64 + 1;
+        let mut sent_bytes: u64 = 0;
+        for _ in 0..cycles {
+            let mut buffer: Vec<u8> = vec![0; min(size - sent_bytes, bufsize) as usize];
+            match file.read_exact(&mut buffer).await {
+                Ok(res) => {
+                    sent_bytes += res as u64;
+                    println!("Video stream: {}, {}, {}", res, buffer.len(), sent_bytes);
+                    yield Ok(buffer) as Result<Vec<u8>, hyper::Error>;
+                },
+                Err(error) => {
+                    println!("Could not get video stream: {:?}", error);
+                    //let affe = Err(error) as Result<Vec<u8>, hyper::Error>;
+                    // let affe = Err(error) as Result<Vec<u8>, std::io::Error>;
+                    // let hypere = hyper::Error::from();
+                    // yield Err(hypere);
+                    //yield Err(error) as Result<Vec<u8>, hyper::Error>;
+                }
+            }
+            //yield Err(error) as Result<Vec<u8>, hyper::Error>;
+            //yield Ok(buffer) as Result<Vec<u8>, hyper::Error>;
+        }
+    };
+    let body = hyper::Body::wrap_stream(stream);
+    let mut response = warp::reply::Response::new(body);
+    
+    let headers = response.headers_mut();
+    let mut header_map = create_headers();
+    header_map.insert("Content-Type", HeaderValue::from_str("video/mp4").unwrap());
+    header_map.insert("Accept-Ranges", HeaderValue::from_str("bytes").unwrap());
+    header_map.insert("Content-Range", HeaderValue::from_str(&format!("bytes {}-{}/{}", 0, size - 1, size)).unwrap());
+    header_map.insert("Content-Length", HeaderValue::from(size));
+    headers.extend(header_map);
+    Ok (response)
 }
 
 #[tokio::main]
