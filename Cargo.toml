@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 
 [dev-dependencies]
-tokio = { version = "1.5", features = ["full"] }
+tokio = { version = "1.7", features = ["full"] }
 async-stream = "0.3"
 hyper = "0.14"
 warp = "0.3"
