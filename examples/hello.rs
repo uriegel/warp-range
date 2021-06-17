@@ -4,13 +4,19 @@ use chrono::Utc;
 use hyper::{Error, StatusCode};
 use tokio::io::AsyncReadExt;
 use async_stream::stream;
-use warp::{
-    Filter, Reply, fs::{
+use warp::{Filter, Rejection, Reply, fs::{
         File, dir
     }, http::HeaderValue, hyper::{
         Body, HeaderMap, Response
-    }
-};
+    }, reply::WithStatus};
+
+pub fn filter_range() -> impl Filter<Extract = (String,), Error = Rejection> + Copy {
+    warp::header::<String>("Range")
+}
+
+pub fn with_partial_content_status<T: Reply>(reply: T) -> WithStatus<T> {
+    warp::reply::with_status(reply, StatusCode::PARTIAL_CONTENT) 
+}
 
 fn add_headers(reply: File)->Response<Body> {
     let mut res = reply.into_response();
@@ -29,20 +35,20 @@ fn create_headers() -> HeaderMap {
     header_map
 }
 
-fn get_range(range: &str) {
-    let range: Vec<String> = range
-        .replace("bytes=", "")
-        .split("-")
-        .filter_map(|n| if n.len() > 0 {Some(n.to_string())} else {None})
-        .collect();
-    let start = if let start = range[0] {start} else {0}
+// fn get_range_params(range: &str)->Result<(u64, u64), Error> {
+//     let range: Vec<String> = range
+//         .replace("bytes=", "")
+//         .split("-")
+//         .filter_map(|n| if n.len() > 0 {Some(n.to_string())} else {None})
+//         .collect();
+//     let start = if let start = range[0] {start} else {0}
 
-    }
+//     }
     
-    let end = if range.len() > 0 {range[1]}  (size-1).to_string()
-}
+//     let end = if range.len() > 0 {range[1]}  (size-1).to_string()
+// }
 
-pub async fn get_range(range: String, file: &str) -> Result<impl warp::Reply, warp::Rejection> {
+pub async fn get_range(range_header: String, file: &str) -> Result<impl warp::Reply, warp::Rejection> {
     match tokio::fs::File::open(file).await {
         Ok(mut file ) => {
             if let Ok(metadata) = file.metadata().await {
@@ -91,8 +97,8 @@ pub async fn get_range(range: String, file: &str) -> Result<impl warp::Reply, wa
 
 #[tokio::main]
 async fn main() {
-    //let test_video = "/home/uwe/Videos/Drive.mkv";
-    let test_video = "/home/uwe/Videos/essen.mp4";
+    let test_video = "/home/uwe/Videos/Drive.mkv";
+    //let test_video = "/home/uwe/Videos/essen.mp4";
     
     let port = 9860;
     println!("Running test server on http://localhost:{}", port);
@@ -100,11 +106,10 @@ async fn main() {
     let route_get_range = 
         warp::path("getvideo")
         .and(warp::path::end())
-        .and(warp::header::<String>("Range"))
-        .and_then(move |r| get_range(r, test_video))
-        .map(|reply|{
-            warp::reply::with_status(reply, StatusCode::PARTIAL_CONTENT)
-        });
+        
+        .and(filter_range())
+        .and_then(move |range_header| get_range(range_header, test_video))
+        .map(with_partial_content_status);
 
     let route_static = dir(".")
         .map(add_headers);
