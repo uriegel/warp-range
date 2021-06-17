@@ -9,8 +9,8 @@ repository = "https://github.com/uriegel/warp-range"
 readme = "README.md"
 
 [dependencies]
-tokio = { version = "1.7", features = ["full"] }
 async-stream = "0.3"
+tokio = { version = "1.7", features = ["full"] }
 hyper = "0.14"
 warp = "0.3"
 

@@ -32,7 +32,8 @@
 //! 
 //!     warp::serve(routes)
 //!         .run(([127, 0, 0, 1], port))
-//!         .await;        
+//!         .await;    
+//! }
 //! ``` 
 //!
 //! If you want to serve the media file without range, which is sometimes necessary, because the browser requests it perhaps without 
