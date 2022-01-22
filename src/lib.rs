@@ -9,7 +9,7 @@
 //! ``` 
 //! use hyper::{Body, Response};
 //! use warp::{Filter, Reply, fs::{File, dir}};
-//! use warp_range::{filter_range, get_range, with_partial_content_status};
+//! use warp_range::{filter_range, get_range};
 //! 
 //! #[tokio::main]
 //! async fn main() {
@@ -23,7 +23,6 @@
 //!         .and(warp::path::end())
 //!         .and(filter_range())
 //!         .and_then(move |range_header| get_range(range_header, test_video, "video/mp4"))
-//!         .map(with_partial_content_status);
 //! 
 //!     let route_static = dir(".");
 //!     
@@ -35,24 +34,6 @@
 //!         .await;    
 //! }
 //! ``` 
-//!
-//! If you want to serve the media file without range, which is sometimes necessary, because the browser requests it perhaps without 
-//! range request header, you can add another route without range:
-//! 
-//! ``` 
-//!     let route_get_video = 
-//!     warp::path("getvideo")
-//!     .and(warp::path::end())
-//!     .and_then(move || get_range("".to_string(), test_video, "video/mp4"));
-//! ``` 
-//!
-//! You have to add this route after the range route:
-//!
-//! ``` 
-//!     let routes = route_get_range
-//!         .or(route_get_video)
-//!         .or(route_static);
-//! ``` 
 
 use async_stream::stream;
 use hyper::StatusCode;
@@ -63,44 +44,48 @@ use tokio::io::{
     AsyncReadExt, AsyncSeekExt
 };
 use warp::{
-    Filter, Rejection, Reply, http::HeaderValue, hyper::HeaderMap, reply::WithStatus
+    Filter, Rejection, http::HeaderValue, hyper::HeaderMap
 };
 
 /// This function filters and extracts the "Range"-Header
-pub fn filter_range() -> impl Filter<Extract = (String,), Error = Rejection> + Copy {
-    warp::header::<String>("Range")
+pub fn filter_range() -> impl Filter<Extract = (Option<String>,), Error = Rejection> + Copy {
+    warp::header::optional::<String>("Range")
 }
 
 /// This function retrives the range of bytes requested by the web client
-pub async fn get_range(range_header: String, file: &str, content_type: &str) -> Result<impl warp::Reply, Rejection> {
+pub async fn get_range(range_header: Option<String>, file: &str, content_type: &str) -> Result<impl warp::Reply, Rejection> {
     internal_get_range(range_header, file, content_type).await.map_err(|e| {
         println!("Error in get_range: {}", e.message);
         warp::reject()
     })
 }
 
-/// This function adds the "206 Partial Content" header
-pub fn with_partial_content_status<T: Reply>(reply: T) -> WithStatus<T> {
-    warp::reply::with_status(reply, StatusCode::PARTIAL_CONTENT) 
-}
+fn get_range_params(range: &Option<String>, size: u64)->Result<(u64, u64), Error> {
 
-fn get_range_params(range: &str, size: u64)->Result<(u64, u64), Error> {
-    let range: Vec<String> = range
-        .replace("bytes=", "")
-        .split("-")
-        .filter_map(|n| if n.len() > 0 {Some(n.to_string())} else {None})
-        .collect();
-    let start = if range.len() > 0 { 
-        range[0].parse::<u64>()? 
-    } else { 
-        0 
-    };
-    let end = if range.len() > 1 {
-        range[1].parse::<u64>()?
-    } else {
-        size-1 
-    };
-    Ok((start, end))
+
+    println!("Der Räntsch: {range:?}");
+
+    match range {
+        Some(range) => {
+            let range: Vec<String> = range
+                .replace("bytes=", "")
+                .split("-")
+                .filter_map(|n| if n.len() > 0 {Some(n.to_string())} else {None})
+                .collect();
+            let start = if range.len() > 0 { 
+                range[0].parse::<u64>()? 
+            } else { 
+                0 
+            };
+            let end = if range.len() > 1 {
+                range[1].parse::<u64>()?
+            } else {
+                size-1 
+            };
+            Ok((start, end))
+        },
+        None => Ok((0, size-1))
+    }
 }
 
 #[derive(Debug)]
@@ -119,7 +104,7 @@ impl From<ParseIntError> for Error {
     }
 }
 
-async fn internal_get_range(range_header: String, file: &str, content_type: &str) -> Result<impl warp::Reply, Error> {
+async fn internal_get_range(range_header: Option<String>, file: &str, content_type: &str) -> Result<impl warp::Reply, Error> {
     let mut file = tokio::fs::File::open(file).await?;
     let metadata = file.metadata().await?;
     let size = metadata.len();
@@ -148,5 +133,15 @@ async fn internal_get_range(range_header: String, file: &str, content_type: &str
     header_map.insert("Content-Range", HeaderValue::from_str(&format!("bytes {}-{}/{}", start_range, end_range, size)).unwrap());
     header_map.insert("Content-Length", HeaderValue::from(byte_count));
     headers.extend(header_map);
-    Ok (response)
+
+    if range_header.is_none() {
+        println!("Ohne");
+        Ok (response)
+    } else {
+        println!("Mit");
+        *response.status_mut() = StatusCode::PARTIAL_CONTENT;
+        Ok (response)
+    }
+
+    
 }

@@ -1,6 +1,6 @@
 use hyper::{Body, HeaderMap, Response, header::HeaderValue};
 use warp::{Filter, Reply, fs::{File, dir}};
-use warp_range::{filter_range, get_range, with_partial_content_status};
+use warp_range::{filter_range, get_range};
 
 fn add_headers(reply: File)->Response<Body> {
     let mut res = reply.into_response();
@@ -18,7 +18,7 @@ fn create_headers() -> HeaderMap {
 
 #[tokio::main]
 async fn main() {
-    let test_video = "/home/uwe/Videos/Drive.mkv";
+    let test_video = "/home/uwe/Videos/Vietnam1.mp4";
     
     let port = 9860;
     println!("Running test server on http://localhost:{}", port);
@@ -26,20 +26,14 @@ async fn main() {
     let route_get_video = 
         warp::path("getvideo")
         .and(warp::path::end())
-        .and_then(move || get_range("".to_string(), test_video, "video/mp4"));
-
-    let route_get_range = 
-        warp::path("getvideo")
-        .and(warp::path::end())
         .and(filter_range())
-        .and_then(move |range_header| get_range(range_header, test_video, "video/mp4"))
-        .map(with_partial_content_status);
+        .and_then(move |range_header| get_range(range_header, test_video, "video/mp4"));
 
     let route_static = dir(".")
         .map(add_headers);
     
-    let routes = route_get_range
-        .or(route_get_video)
+    let routes = 
+        route_get_video
         .or(route_static);
 
     warp::serve(routes)
