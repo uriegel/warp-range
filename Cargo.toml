@@ -1,6 +1,6 @@
 [package]
 name = "warp-range"
-version = "1.0.0"
+version = "1.0.1"
 description = "Warp filter for serving file content with range like mp3 audio or mp4 video"
 authors = ["Uwe Riegel <uriegel@hotmail.de>"]
 edition = "2018"

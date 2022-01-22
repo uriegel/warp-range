@@ -61,10 +61,6 @@ pub async fn get_range(range_header: Option<String>, file: &str, content_type: &
 }
 
 fn get_range_params(range: &Option<String>, size: u64)->Result<(u64, u64), Error> {
-
-
-    println!("Der Räntsch: {range:?}");
-
     match range {
         Some(range) => {
             let range: Vec<String> = range
@@ -134,14 +130,8 @@ async fn internal_get_range(range_header: Option<String>, file: &str, content_ty
     header_map.insert("Content-Length", HeaderValue::from(byte_count));
     headers.extend(header_map);
 
-    if range_header.is_none() {
-        println!("Ohne");
-        Ok (response)
-    } else {
-        println!("Mit");
+    if range_header.is_some() {
         *response.status_mut() = StatusCode::PARTIAL_CONTENT;
-        Ok (response)
     }
-
-    
+    Ok (response)
 }
