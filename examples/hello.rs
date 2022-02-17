@@ -1,6 +1,10 @@
 use hyper::{Body, HeaderMap, Response, header::HeaderValue};
 use warp::{Filter, Reply, fs::{File, dir}};
-use warp_range::{filter_range, get_range};
+use warp_range::{filter_range, get_range_with_cb};
+
+fn callback(bytes: u64) {
+    println!("Bytes: {}", bytes);
+}
 
 fn add_headers(reply: File)->Response<Body> {
     let mut res = reply.into_response();
@@ -27,7 +31,9 @@ async fn main() {
         warp::path("getvideo")
         .and(warp::path::end())
         .and(filter_range())
-        .and_then(move |range_header| get_range(range_header, test_video, "video/mp4"));
+        .and_then(move |range_header| get_range_with_cb(range_header, test_video, "video/mp4", |bytes| {
+            callback(bytes); 
+        }));
 
     let route_static = dir(".")
         .map(add_headers);

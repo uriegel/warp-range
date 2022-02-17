@@ -54,7 +54,15 @@ pub fn filter_range() -> impl Filter<Extract = (Option<String>,), Error = Reject
 
 /// This function retrives the range of bytes requested by the web client
 pub async fn get_range(range_header: Option<String>, file: &str, content_type: &str) -> Result<impl warp::Reply, Rejection> {
-    internal_get_range(range_header, file, content_type).await.map_err(|e| {
+    internal_get_range(range_header, file, content_type, None).await.map_err(|e| {
+        println!("Error in get_range: {}", e.message);
+        warp::reject()
+    })
+}
+
+/// This function retrives the range of bytes requested by the web client. You can define a callback function for logging purpose or media access control
+pub async fn get_range_with_cb(range_header: Option<String>, file: &str, content_type: &str, progress: fn(size: u64)) -> Result<impl warp::Reply, Rejection> {
+    internal_get_range(range_header, file, content_type, Some(progress)).await.map_err(|e| {
         println!("Error in get_range: {}", e.message);
         warp::reject()
     })
@@ -100,7 +108,7 @@ impl From<ParseIntError> for Error {
     }
 }
 
-async fn internal_get_range(range_header: Option<String>, file: &str, content_type: &str) -> Result<impl warp::Reply, Error> {
+async fn internal_get_range(range_header: Option<String>, file: &str, content_type: &str, cb: Option<fn(u64)>) -> Result<impl warp::Reply, Error> {
     let mut file = tokio::fs::File::open(file).await?;
     let metadata = file.metadata().await?;
     let size = metadata.len();
@@ -116,6 +124,9 @@ async fn internal_get_range(range_header: Option<String>, file: &str, content_ty
             let mut buffer: Vec<u8> = vec![0; min(byte_count - sent_bytes, bufsize) as usize];
             let bytes_read = file.read_exact(&mut buffer).await.unwrap();
             sent_bytes += bytes_read as u64;
+            if let Some(cb) = cb { 
+                cb(sent_bytes);
+            } 
             yield Ok(buffer) as Result<Vec<u8>, hyper::Error>;
         }
     };
