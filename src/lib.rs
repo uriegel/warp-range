@@ -6,7 +6,7 @@
 //! The content is served like streaming. If you view a movie served by this filter, you can seek through it even if the file is not completely downloaded.
 //!
 //! Here is an easy example to add range to an existing warp server:
-//! ``` 
+//! ```no_run
 //! use hyper::{Body, Response};
 //! use warp::{Filter, Reply, fs::{File, dir}};
 //! use warp_range::{filter_range, get_range};
@@ -22,7 +22,7 @@
 //!         warp::path("getvideo")
 //!         .and(warp::path::end())
 //!         .and(filter_range())
-//!         .and_then(move |range_header| get_range(range_header, test_video, "video/mp4"))
+//!         .and_then(move |range_header| get_range(range_header, test_video.to_string(), "video/mp4".to_string()));
 //! 
 //!     let route_static = dir(".");
 //!     
@@ -53,16 +53,16 @@ pub fn filter_range() -> impl Filter<Extract = (Option<String>,), Error = Reject
 }
 
 /// This function retrives the range of bytes requested by the web client
-pub async fn get_range(range_header: Option<String>, file: &str, content_type: &str) -> Result<impl warp::Reply, Rejection> {
-    internal_get_range(range_header, file, content_type, None).await.map_err(|e| {
+pub async fn get_range(range_header: Option<String>, file: String, content_type: String) -> Result<impl warp::Reply, Rejection> {
+    internal_get_range(range_header, &file, &content_type, None).await.map_err(|e| {
         println!("Error in get_range: {}", e.message);
         warp::reject()
     })
 }
 
 /// This function retrives the range of bytes requested by the web client. You can define a callback function for logging purpose or media access control
-pub async fn get_range_with_cb(range_header: Option<String>, file: &str, content_type: &str, progress: fn(size: u64)) -> Result<impl warp::Reply, Rejection> {
-    internal_get_range(range_header, file, content_type, Some(progress)).await.map_err(|e| {
+pub async fn get_range_with_cb(range_header: Option<String>, file: String, content_type: String, progress: fn(size: u64)) -> Result<impl warp::Reply, Rejection> {
+    internal_get_range(range_header, &file, &content_type, Some(progress)).await.map_err(|e| {
         println!("Error in get_range: {}", e.message);
         warp::reject()
     })
