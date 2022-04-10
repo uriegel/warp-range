@@ -31,7 +31,7 @@ async fn main() {
         warp::path("getvideo")
         .and(warp::path::end())
         .and(filter_range())
-        .and_then(move |range_header| get_range_with_cb(range_header, test_video, "video/mp4", |bytes| {
+        .and_then(move |range_header| get_range_with_cb(range_header, test_video.to_string(), "video/mp4".to_string(), |bytes| {
             callback(bytes); 
         }));
 
