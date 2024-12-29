@@ -36,7 +36,6 @@
 //! ``` 
 
 use async_stream::stream;
-use hyper::StatusCode;
 use std::{
     cmp::min, io::SeekFrom, num::ParseIntError
 };
@@ -44,7 +43,7 @@ use tokio::io::{
     AsyncReadExt, AsyncSeekExt
 };
 use warp::{
-    Filter, Rejection, http::HeaderValue, hyper::HeaderMap
+    Filter, http::StatusCode, Rejection, http::HeaderValue, hyper::HeaderMap
 };
 
 /// This function filters and extracts the "Range"-Header
@@ -127,7 +126,7 @@ async fn internal_get_range(range_header: Option<String>, file: &str, content_ty
             if let Some(cb) = cb { 
                 cb(sent_bytes);
             } 
-            yield Ok(buffer) as Result<Vec<u8>, hyper::Error>;
+            yield Ok(buffer) as Result<Vec<u8>, warp::http::Error>;
         }
     };
     let body = hyper::Body::wrap_stream(stream);

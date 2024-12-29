@@ -22,7 +22,7 @@ fn create_headers() -> HeaderMap {
 
 #[tokio::main]
 async fn main() {
-    let test_video = "/home/uwe/Videos/Vietnam1.mp4";
+    let test_video = "/home/uwe/Videos/Ali.mkv";
     
     let port = 9860;
     println!("Running test server on http://localhost:{}", port);

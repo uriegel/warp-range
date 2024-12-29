@@ -1,6 +1,6 @@
 [package]
 name = "warp-range"
-version = "2.0.0"
+version = "3.0.0"
 description = "Warp filter for serving file content with range like mp3 audio or mp4 video"
 authors = ["Uwe Riegel <uriegel@hotmail.de>"]
 edition = "2018"
@@ -10,7 +10,9 @@ readme = "README.md"
 
 [dependencies]
 async-stream = "0.3"
-tokio = { version = "1.15", features = ["full"] }
+tokio = { version = "1.42" }
 hyper = "0.14"
 warp = "0.3"
 
+[target.'example.hello'.dependencies]
+tokio = { version = "1.42.0", features = ["full"]}
